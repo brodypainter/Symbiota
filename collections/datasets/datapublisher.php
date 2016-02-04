@@ -193,10 +193,10 @@ include($serverRoot."/header.php");
 	<div style="margin:20px;">
 		RSS Feed: 
 		<?php 
+		$urlPrefix = 'http://'.$_SERVER["SERVER_NAME"];
+		if($_SERVER["SERVER_PORT"] && $_SERVER["SERVER_PORT"] != 80) $urlPrefix .= ':'.$_SERVER["SERVER_PORT"];
+		$urlPrefix .= $clientRoot.(substr($clientRoot,-1)=='/'?'':'/');
 		if(file_exists('../../webservices/dwc/rss.xml')){
-			$urlPrefix = 'http://'.$_SERVER["SERVER_NAME"];
-			if($_SERVER["SERVER_PORT"] && $_SERVER["SERVER_PORT"] != 80) $urlPrefix .= ':'.$_SERVER["SERVER_PORT"];
-			$urlPrefix .= $clientRoot.(substr($clientRoot,-1)=='/'?'':'/');
 			$feedLink = $urlPrefix.'webservices/dwc/rss.xml';
 			echo '<a href="'.$feedLink.'" target="_blank">'.$feedLink.'</a>';
 		}
@@ -210,6 +210,7 @@ include($serverRoot."/header.php");
 		if($action == 'Create/Refresh Darwin Core Archive'){
 			echo '<ul>';
 			$dwcaManager->setVerbose(1);
+			$dwcaManager->setLimitToGuids(true);
 			$dwcaManager->createDwcArchive();
 			$dwcaManager->writeRssFile();
 			echo '</ul>';
@@ -264,10 +265,19 @@ include($serverRoot."/header.php");
 					<input type="radio" name="schema" value="2" /> Symbiota Archive
 					-->
 				</div>
-				<div style="clear:both;">
+				<div style="clear:both;margin:10px;">
 					<input type="hidden" name="collid" value="<?php echo $collId; ?>" />
 					<input type="submit" name="formsubmit" value="Create/Refresh Darwin Core Archive" />
 				</div>
+				<?php 
+				if($collArr[$collId]['managementtype'] != 'Live Data' || $collArr[$collId]['guidtarget'] != 'symbiotaUUID'){
+					?>
+					<div style="margin:10px;font-weight:bold">
+						NOTE: all records lacking occurrenceID GUIDs will be excluded
+					</div>
+					<?php
+				}
+				?>
 			</fieldset>
 		</form>
 		<?php
@@ -277,6 +287,7 @@ include($serverRoot."/header.php");
 			if($action == 'Create/Refresh Darwin Core Archive(s)'){
 				echo '<ul>';
 				$dwcaManager->setVerbose(1);
+				$dwcaManager->setLimitToGuids(true);
 				$dwcaManager->batchCreateDwca($_POST['coll']);
 				echo '</ul>';
 			}
