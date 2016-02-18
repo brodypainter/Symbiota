@@ -25,13 +25,14 @@
 
 	// Database interface code
 	$conn = MySQLiConnectionFactory::getCon("readonly");
-	$query = 'SELECT * FROM omoccuredits WHERE initialtimestamp > "' . $timestart . '" LIMIT 10';
+	$query = 'SELECT * FROM omoccuredits WHERE initialtimestamp > "' . $timestart . '" AND initialtimestamp < "' . $timeend . '" LIMIT 10';
 	$rs = mysqli_query($conn, $query);
 	$resultArray[] = null;
 	while(($temp = mysqli_fetch_assoc($rs)) != null){
 		array_push($resultArray, $temp);
 	}
 
+	// echo $query;
 	//echo json_encode($_REQUEST);
 	echo json_encode($resultArray);
 
