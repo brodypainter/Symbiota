@@ -157,7 +157,7 @@ header("Content-Type: text/html; charset=".$CHARSET);
 	<link href="../../css/jquery-ui.css" type="text/css" rel="stylesheet" />
 	<script src="../../js/jquery.js" type="text/javascript"></script>
 	<script src="../../js/jquery-ui.js" type="text/javascript"></script>
-	<script type="text/javascript" src="http://maps.googleapis.com/maps/api/js?sensor=false"></script>
+	<script type="text/javascript" src="//maps.googleapis.com/maps/api/js?sensor=false"></script>
 	<script type="text/javascript">
 		var tabIndex = <?php echo $tabIndex; ?>;
 		var map;

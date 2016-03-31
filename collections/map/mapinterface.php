@@ -164,7 +164,7 @@ if($coordArr && !is_numeric($coordArr)){
 	<script type="text/javascript" src="../../js/jquery.mobile-1.4.0.min.js"></script>
 	<script type="text/javascript" src="../../js/jquery-1.9.1.js"></script>
 	<script type="text/javascript" src="../../js/jquery-ui-1.10.4.js"></script>
-	<script src="https://maps.googleapis.com/maps/api/js?v=3.exp&libraries=drawing"></script>
+	<script src="//maps.googleapis.com/maps/api/js?v=3.exp&libraries=drawing"></script>
 	<script type="text/javascript" src="../../js/jscolor/jscolor.js"></script>
 	<script type="text/javascript">
 		$(function() {

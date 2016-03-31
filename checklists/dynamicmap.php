@@ -34,7 +34,7 @@ elseif($coordRange > 40){
 	<link href="../css/base.css?<?php echo $CSS_VERSION; ?>" type="text/css" rel="stylesheet" />
 	<link href="../css/main.css?<?php echo $CSS_VERSION; ?>" type="text/css" rel="stylesheet" />
 	<meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
-	<script type="text/javascript" src="http://maps.googleapis.com/maps/api/js?sensor=false">
+	<script type="text/javascript" src="//maps.googleapis.com/maps/api/js?sensor=false">
 	</script>
 
 	<script type="text/javascript">

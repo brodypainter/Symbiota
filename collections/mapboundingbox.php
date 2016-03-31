@@ -13,7 +13,7 @@ $lngCenter = ($boundaryArr[1]>$boundaryArr[3]?((($boundaryArr[1]-$boundaryArr[3]
 		<title><?php echo $DEFAULT_TITLE.' - '.$LANG['MBB_TITLE']; ?></title>
 	</head> 
 	<body style="background-color:#ffffff;">
-	<script src="http://maps.googleapis.com/maps/api/js?sensor=false" type="text/javascript"></script>
+	<script src="//maps.googleapis.com/maps/api/js?sensor=false" type="text/javascript"></script>
 	<script type="text/javascript">
       	var map;
       	var rectangle;

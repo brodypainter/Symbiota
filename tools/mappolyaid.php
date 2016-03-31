@@ -1,6 +1,7 @@
 <?php
 include_once('../config/symbini.php');
 header("Content-Type: text/html; charset=".$charset);
+
 $formName = array_key_exists("formname",$_REQUEST)?$_REQUEST["formname"]:"";
 $latName = array_key_exists("latname",$_REQUEST)?$_REQUEST["latname"]:""; 
 $longName = array_key_exists("longname",$_REQUEST)?$_REQUEST["longname"]:""; 
@@ -32,7 +33,7 @@ else{
 	<head>
 		<title><?php echo $defaultTitle; ?> - Coordinate Aid</title>
 		<meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
-		<script src="https://maps.googleapis.com/maps/api/js?v=3.exp&sensor=false&libraries=drawing"></script>
+		<script src="//maps.googleapis.com/maps/api/js?v=3.exp&sensor=false&libraries=drawing"></script>
 	    <script type="text/javascript">
 		    var map;
 		    var currentMarker;

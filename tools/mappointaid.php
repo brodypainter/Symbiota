@@ -1,6 +1,8 @@
 <?php
 include_once('../config/symbini.php');
-header("Content-Type: text/html; charset=".$charset);
+header("Content-Type: text/html; charset=".$CHARSET);
+
+
 $formName = array_key_exists("formname",$_REQUEST)?$_REQUEST["formname"]:""; 
 $latName = array_key_exists("latname",$_REQUEST)?$_REQUEST["latname"]:""; 
 $longName = array_key_exists("longname",$_REQUEST)?$_REQUEST["longname"]:""; 
@@ -31,7 +33,7 @@ else{
 	<head>
 		<title><?php echo $defaultTitle; ?> - Coordinate Aid</title>
 		<meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
-		<script type="text/javascript" src="http://maps.googleapis.com/maps/api/js?sensor=false">
+		<script type="text/javascript" src="//maps.googleapis.com/maps/api/js?sensor=false">
 		</script>
 	    <script type="text/javascript">
 		    var map;
@@ -91,11 +93,14 @@ else{
 
 	        function updateParentForm() {
 				try{
-		            opener.document.<?php echo $formName.'.'.$latName; ?>.value = document.getElementById("latbox").value;
-		            opener.document.<?php echo $formName.'.'.$longName; ?>.value = document.getElementById("lngbox").value;
+					var latObj = opener.document.<?php echo $formName.'.'.$latName; ?>;
+					var lngObj = opener.document.<?php echo $formName.'.'.$longName; ?>;
+					latObj.value = document.getElementById("latbox").value;
+					lngObj.value = document.getElementById("lngbox").value;
+					lngObj.onchange();
 				}
 				catch(myErr){
-					alert("Unable to transfer data. Please let an administrator know.");
+					//alert("Unable to transfer data. Please let an administrator know.");
 				}
 	            self.close();
 	            return false;

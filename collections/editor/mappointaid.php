@@ -1,6 +1,7 @@
 <?php
 include_once('../../config/symbini.php');
 header("Content-Type: text/html; charset=".$charset);
+
 $latDef = array_key_exists("latdef",$_REQUEST)?$_REQUEST["latdef"]:0; 
 $lngDef = array_key_exists("lngdef",$_REQUEST)?$_REQUEST["lngdef"]:0; 
 $errRad = array_key_exists("errrad",$_REQUEST)?$_REQUEST["errrad"]:0;
@@ -29,7 +30,7 @@ if(is_numeric($errRad)){
 	<head>
 		<title><?php echo $defaultTitle; ?> - Coordinate Aid</title>
 		<meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
-		<script src="https://maps.googleapis.com/maps/api/js?v=3.exp&sensor=false&libraries=drawing"></script>
+		<script src="//maps.googleapis.com/maps/api/js?v=3.exp&sensor=false&libraries=drawing"></script>
 	    <script type="text/javascript">
 		    var map;
 		    var currentMarker;

@@ -327,7 +327,6 @@ class ImageShared{
 	}
 	
 	public function processImage($tid=0){
-		global $paramsArr;
 
 		if(!$this->imgName){
 			$this->errArr[] = 'FATAL ERROR: Image file name null in processImage fucntion';
@@ -500,7 +499,6 @@ class ImageShared{
 	}
 	
 	public function databaseImage($imgWebUrl,$imgTnUrl,$imgLgUrl,$tid){
-		global $paramsArr;
 		$status = true;
 		if($imgWebUrl){
 			$urlBase = $this->getUrlBase();
@@ -540,7 +538,7 @@ class ImageShared{
 				($this->locality?'"'.$this->locality.'"':'NULL').','.
 				($this->occid?$this->occid:'NULL').','.
 				($this->notes?'"'.$this->notes.'"':'NULL').',"'.
-				$this->cleanInStr($paramsArr['un']).'",'.
+				$this->cleanInStr($GLOBALS['USERNAME']).'",'.
 				($this->sortSeq?$this->sortSeq:'50').','.
 				($this->sourceIdentifier?'"'.$this->sourceIdentifier.'"':'NULL').','.
 				($this->rights?'"'.$this->rights.'"':'NULL').','.
@@ -1032,10 +1030,11 @@ class ImageShared{
 			if(strtolower(substr($this->sourcePath,0,7)) == 'http://' || strtolower(substr($this->sourcePath,0,8)) == 'https://'){
 				$x = array_change_key_case(get_headers($this->sourcePath, 1),CASE_LOWER); 
 				if ( strcasecmp($x[0], 'HTTP/1.1 200 OK') != 0 ) { 
-					$fileSize = $x['content-length'][1]; 
+					if(isset($x['content-length'][1])) $fileSize = $x['content-length'][1];
+					elseif(isset($x['content-length'])) $fileSize = $x['content-length'];
 				}
 	 			else { 
-	 				$fileSize = $x['content-length']; 
+	 				if(isset($x['content-length'])) $fileSize = $x['content-length']; 
 	 			}
 	 			/*
 				$ch = curl_init($this->sourcePath);
@@ -1082,7 +1081,7 @@ class ImageShared{
 		if(file_exists($url) || ($localUrl && file_exists($localUrl))){
 			return true;
 	    }
-
+return true;
 	    //Second check
 	    if(!$exists){
 		    // Version 4.x supported
