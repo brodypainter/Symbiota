@@ -375,11 +375,8 @@ class OccurrenceManager{
 		}
 		if(array_key_exists('catnum',$this->searchTermsArr)){
 			$catStr = $this->searchTermsArr['catnum'];
-			$isOccid = false;
-			if(substr($catStr,0,5) == 'occid'){
-				$catStr = trim(substr($catStr,5));
-				$isOccid = true;
-			}
+			$includeOtherCatNum = array_key_exists('othercatnum',$this->searchTermsArr)?true:false;
+
 			$catArr = explode(',',str_replace(';',',',$catStr));
 			$betweenFrag = array();
 			$inFrag = array();
@@ -388,17 +385,18 @@ class OccurrenceManager{
 					$term1 = trim(substr($v,0,$p));
 					$term2 = trim(substr($v,$p+3));
 					if(is_numeric($term1) && is_numeric($term2)){
-						if($isOccid){
-							$betweenFrag[] = '(o.occid BETWEEN '.$term1.' AND '.$term2.')';
-						}
-						else{
-							$betweenFrag[] = '(o.catalogNumber BETWEEN '.$term1.' AND '.$term2.')';
+						$betweenFrag[] = '(o.catalogNumber BETWEEN '.$term1.' AND '.$term2.')';
+						if($includeOtherCatNum){
+							$betweenFrag[] = '(o.othercatalognumbers BETWEEN '.$term1.' AND '.$term2.')';
 						}
 					}
 					else{
 						$catTerm = 'o.catalogNumber BETWEEN "'.$term1.'" AND "'.$term2.'"';
 						if(strlen($term1) == strlen($term2)) $catTerm .= ' AND length(o.catalogNumber) = '.strlen($term2);
 						$betweenFrag[] = '('.$catTerm.')';
+						if($includeOtherCatNum){
+							$betweenFrag[] = '(o.othercatalognumbers BETWEEN "'.$term1.'" AND "'.$term2.'")';
+						}
 					}
 				}
 				else{
@@ -414,56 +412,13 @@ class OccurrenceManager{
 				$catWhere .= 'OR '.implode(' OR ',$betweenFrag);
 			}
 			if($inFrag){
-				if($isOccid){
-					$catWhere .= 'OR (o.occid IN('.implode(',',$inFrag).')) ';
-				}
-				else{
-					$catWhere .= 'OR (o.catalogNumber IN("'.implode('","',$inFrag).'")) ';
+				$catWhere .= 'OR (o.catalogNumber IN("'.implode('","',$inFrag).'")) ';
+				if($includeOtherCatNum){
+					$catWhere .= 'OR (o.othercatalognumbers IN("'.implode('","',$inFrag).'")) ';
 				}
 			}
 			$sqlWhere .= 'AND ('.substr($catWhere,3).') ';
 			$this->localSearchArr[] = $this->searchTermsArr['catnum'];
-		}
-		if(array_key_exists('othercatnum',$this->searchTermsArr)){
-			$otherCatStr = $this->searchTermsArr['othercatnum'];
-			
-			/*
-			 * Restrict search to a single term until field is fully indexed 
-			$otherCatArr = explode(',',str_replace(';',',',$otherCatStr));
-			$betweenFrag = array();
-			$inFrag = array();
-			foreach($otherCatArr as $v){
-				if($p = strpos($v,' - ')){
-					$term1 = trim(substr($v,0,$p));
-					$term2 = trim(substr($v,$p+3));
-					if(is_numeric($term1) && is_numeric($term2)){
-						$betweenFrag[] = '(o.otherCatalogNumbers BETWEEN '.$term1.' AND '.$term2.')';
-					}
-					else{
-						$otherCatTerm = 'o.otherCatalogNumbers BETWEEN "'.$term1.'" AND "'.$term2.'"';
-						if(strlen($term1) == strlen($term2)) $otherCatTerm .= ' AND length(o.otherCatalogNumbers) = '.strlen($term2);
-						$betweenFrag[] = '('.$otherCatTerm.')';
-					}
-				}
-				else{
-					$vStr = trim($v);
-					$inFrag[] = $vStr;
-					if(is_numeric($vStr) && substr($vStr,0,1) == '0'){
-						$inFrag[] = ltrim($vStr,0);
-					}
-				}
-			}
-			$otherCatWhere = '';
-			if($betweenFrag){
-				$otherCatWhere .= 'OR '.implode(' OR ',$betweenFrag);
-			}
-			if($inFrag){
-				$otherCatWhere .= 'OR (o.otherCatalogNumbers IN("'.implode('","',$inFrag).'")) ';
-			}
-			$sqlWhere .= 'AND ('.substr($otherCatWhere,3).') ';
-			*/
-			$sqlWhere .= 'AND (o.otherCatalogNumbers IN("'.$otherCatStr.'")) ';
-			$this->localSearchArr[] = $this->searchTermsArr['othercatnum'];
 		}
 		if(array_key_exists("typestatus",$this->searchTermsArr)){
 			$sqlWhere .= "AND (o.typestatus IS NOT NULL) ";
@@ -835,56 +790,38 @@ class OccurrenceManager{
 
 	public function getDatasetSearchStr(){
 		$retStr ="";
-		if(array_key_exists("clid",$this->searchTermsArr)){
-			$retStr = $this->getClidVoucherStr();
+		if(!array_key_exists('db',$this->searchTermsArr) || $this->searchTermsArr['db'] == 'all'){
+			$retStr = "All Collections";
+		}
+		elseif($this->searchTermsArr['db'] == 'allspec'){
+			$retStr = "All Specimen Collections";
+		}
+		elseif($this->searchTermsArr['db'] == 'allobs'){
+			$retStr = "All Observation Projects";
 		}
 		else{
-			if(!array_key_exists('db',$this->searchTermsArr) || $this->searchTermsArr['db'] == 'all'){
-				$retStr = "All Collections";
-			}
-			elseif($this->searchTermsArr['db'] == 'allspec'){
-				$retStr = "All Specimen Collections";
-			}
-			elseif($this->searchTermsArr['db'] == 'allobs'){
-				$retStr = "All Observation Projects";
-			}
-			else{
-				$cArr = explode(';',$this->searchTermsArr['db']);
-				if($cArr[0]){
-					$sql = 'SELECT collid, CONCAT_WS("-",institutioncode,collectioncode) as instcode '.
-						'FROM omcollections WHERE collid IN('.$cArr[0].') ORDER BY institutioncode,collectioncode';
-					$rs = $this->conn->query($sql);
-					while($r = $rs->fetch_object()){
-						$retStr .= '; '.$r->instcode;
-					}
-					$rs->free();
+			$cArr = explode(';',$this->searchTermsArr['db']);
+			if($cArr[0]){
+				$sql = 'SELECT collid, CONCAT_WS("-",institutioncode,collectioncode) as instcode '.
+					'FROM omcollections WHERE collid IN('.$cArr[0].') ORDER BY institutioncode,collectioncode';
+				$rs = $this->conn->query($sql);
+				while($r = $rs->fetch_object()){
+					$retStr .= '; '.$r->instcode;
 				}
-				/*
-				if(isset($cArr[1]) && $cArr[1]){
-					$sql = 'SELECT ccpk, category FROM omcollcategories WHERE ccpk IN('.$cArr[1].') ORDER BY category';
-					$rs = $this->conn->query($sql);
-					while($r = $rs->fetch_object()){
-						$retStr .= '; '.$r->category;
-					}
-					$rs->free();
-				}
-				*/
-				$retStr = substr($retStr,2);
+				$rs->free();
 			}
+			/*
+			if(isset($cArr[1]) && $cArr[1]){
+				$sql = 'SELECT ccpk, category FROM omcollcategories WHERE ccpk IN('.$cArr[1].') ORDER BY category';
+				$rs = $this->conn->query($sql);
+				while($r = $rs->fetch_object()){
+					$retStr .= '; '.$r->category;
+				}
+				$rs->free();
+			}
+			*/
+			$retStr = substr($retStr,2);
 		}
-		return $retStr;
-	}
-
-	private function getClidVoucherStr(){
-		$retStr = 'Various Voucher Projects';
-		/*
-		$sql = "SELECT projectname FROM omsurveys WHERE (surveyid IN(".str_replace(";",",",$this->searchTermsArr["surveyid"]).")) ";
-		$rs = $this->conn->query($sql);
-		while($row = $rs->fetch_object()){
-			$returnStr .= " ;".$row->projectname;
-		}
-		return substr($returnStr,2);
-		*/
 		return $retStr;
 	}
 
@@ -1167,21 +1104,13 @@ class OccurrenceManager{
 				$str = str_replace(",",";",$catNum);
 				$searchArr[] = "catnum:".$str;
 				$this->searchTermsArr["catnum"] = $str;
+				if(array_key_exists("includeothercatnum",$_REQUEST)){
+					$searchArr[] = "othercatnum:1";
+					$this->searchTermsArr["othercatnum"] = '1';
+				}
 			}
 			else{
 				unset($this->searchTermsArr["catnum"]);
-			}
-			$searchFieldsActivated = true;
-		}
-		if(array_key_exists("othercatnum",$_REQUEST)){
-			$othercatnum = $this->cleanInStr($_REQUEST["othercatnum"]);
-			if($othercatnum){
-				//$str = str_replace(",",";",$othercatnum);
-				$searchArr[] = "othercatnum:".$othercatnum;
-				$this->searchTermsArr["othercatnum"] = $othercatnum;
-			}
-			else{
-				unset($this->searchTermsArr["othercatnum"]);
 			}
 			$searchFieldsActivated = true;
 		}
