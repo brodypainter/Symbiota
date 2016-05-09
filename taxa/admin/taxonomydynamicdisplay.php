@@ -11,7 +11,9 @@ $displayAuthor = array_key_exists('displayauthor',$_REQUEST)?$_REQUEST['displaya
 $taxAuthId = array_key_exists("taxauthid",$_REQUEST)?$_REQUEST["taxauthid"]:1;
 $statusStr = array_key_exists('statusstr',$_REQUEST)?$_REQUEST['statusstr']:'';
 
-$taxonDisplayObj = new TaxonomyDisplayManager($target);
+$taxonDisplayObj = new TaxonomyDisplayManager();
+$taxonDisplayObj->setTargetStr($target);
+$taxonDisplayObj->setTaxAuthId($taxAuthId);
 
 $editable = false;
 if($isAdmin || array_key_exists("Taxonomy",$userRights)){
@@ -53,7 +55,7 @@ if($target){
 		$(document).ready(function() {
 			$("#taxontarget").autocomplete({
 				source: function( request, response ) {
-					$.getJSON( "rpc/gettaxasuggest.php", { term: request.term, taid: document.tdform.taxauthid.value }, response );
+					$.getJSON( "rpc/getdynataxasuggest.php", { term: request.term, taid: document.tdform.taxauthid.value }, response );
 				}
 			},{ minLength: 3 }
 			);
@@ -83,7 +85,7 @@ else{
 	?>
 	<div class="navpath">
 		<a href="../../index.php">Home</a> &gt;&gt; 
-		<a href="taxaloader.php"><b>Taxonomy Explorer</b></a> 
+		<a href="taxonomydynamicdisplay.php"><b>Taxonomy Explorer</b></a> 
 	</div>
 	<?php 
 }
