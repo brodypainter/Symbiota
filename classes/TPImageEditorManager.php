@@ -104,6 +104,7 @@ class TPImageEditorManager extends TPEditorManager{
 		
 		$imgPath = $postArr["filepath"];
 
+		$imgManager->setTid($this->tid);
 		$imgManager->setCaption($postArr['caption']);
 		$imgManager->setPhotographer($postArr['photographer']);
 		$imgManager->setPhotographerUid($postArr['photographeruid']);
@@ -115,7 +116,7 @@ class TPImageEditorManager extends TPEditorManager{
 		$imgManager->setNotes($postArr['notes']);
 		$imgManager->setSortSeq($postArr['sortsequence']);
 
-		$imgManager->setTargetPath($this->family);
+		$imgManager->setTargetPath($this->family.'/'.date('Ym').'/');
 		if($imgPath){
 			$imgManager->setMapLargeImg(true);
 			$importUrl = (array_key_exists('importurl',$postArr) && $postArr['importurl']==1?true:false);
@@ -137,7 +138,7 @@ class TPImageEditorManager extends TPEditorManager{
 				//echo implode('; ',$imgManager->getErrArr());
 			}
 		}
-		$imgManager->processImage($this->tid);
+		$imgManager->processImage();
 		if($imgManager->getErrArr()){
 			$this->errorStr = implode('<br/>',$imgManager->getErrArr());
 		}

@@ -9,16 +9,16 @@ class OccurrenceEditorManager {
 
 	protected $conn;
 	protected $occid;
-	private $collId;
+	private $collId = 0;
 	protected $collMap = array();
-	private $occurrenceMap = array();
+	protected $occurrenceMap = array();
 	private $occFieldArr = array();
 	private $sqlWhere;
 	private $qryArr = array();
 	private $crowdSourceMode = 0;
 	private $exsiccatiMode = 0;
 	private $symbUid;
-	protected $errorArr = '';
+	protected $errorArr = array();
 	protected $isShareConn = false;
 
 	public function __construct($conn = null){
@@ -29,7 +29,7 @@ class OccurrenceEditorManager {
 		else{
 			$this->conn = MySQLiConnectionFactory::getCon("write");
 		}
-		$this->occFieldArr = array('catalognumber', 'othercatalognumbers', 'occurrenceid','family', 'scientificname', 'sciname',
+		$this->occFieldArr = array('dbpk', 'catalognumber', 'othercatalognumbers', 'occurrenceid','family', 'scientificname', 'sciname',
 			'tidinterpreted', 'scientificnameauthorship', 'identifiedby', 'dateidentified', 'identificationreferences',
 			'identificationremarks', 'taxonremarks', 'identificationqualifier', 'typestatus', 'recordedby', 'recordnumber',
 			'associatedcollectors', 'eventdate', 'year', 'month', 'day', 'startdayofyear', 'enddayofyear',
@@ -491,6 +491,10 @@ class OccurrenceEditorManager {
 				elseif($ct=='NOTNULL'){
 					$sqlWhere .= 'AND ('.$cf.' IS NOT NULL) ';
 				}
+				elseif($ct=='NOT EQUALS' && $cv){
+					if(!is_numeric($cv)) $cv = '"'.$cv.'"';
+					$sqlWhere .= 'AND ('.$cf.' <> '.$cv.') ';
+				}
 				elseif($ct=='GREATER' && $cv){
 					if(!is_numeric($cv)) $cv = '"'.$cv.'"';
 					$sqlWhere .= 'AND ('.$cf.' > '.$cv.') ';
@@ -612,7 +616,7 @@ class OccurrenceEditorManager {
 		return $this->occurrenceMap;
 	}
 
-	private function setOccurArr(){
+	protected function setOccurArr(){
 		$retArr = Array();
 		$sql = 'SELECT DISTINCT o.occid, o.collid, o.'.implode(',o.',$this->occFieldArr).' FROM omoccurrences o ';
 		if($this->occid){
@@ -997,39 +1001,8 @@ class OccurrenceEditorManager {
 					}
 				}
 				//Deal with checklist voucher
-				if(isset($occArr['clidvoucher']) && $occArr['clidvoucher']){
-					if(isset($occArr['tidinterpreted']) && $occArr['tidinterpreted']){
-						//Check to see it the name is in the list, if not, add it
-						$clTid = 0;
-						$sqlCl = 'SELECT cl.tid '.
-							'FROM fmchklsttaxalink cl INNER JOIN taxstatus ts1 ON cl.tid = ts1.tidaccepted '.
-							'INNER JOIN taxstatus ts2 ON ts1.tidaccepted = ts2.tidaccepted '.
-							'WHERE ts1.taxauthid = 1 AND ts2.taxauthid = 1 AND ts2.tid = '.$occArr['tidinterpreted'].' AND cl.clid = '.$occArr['clidvoucher'];
-						$rsCl = $this->conn->query($sqlCl);
-						//echo $sqlCl;
-						if($rowCl = $rsCl->fetch_object()){
-							$clTid = $rowCl->tid;
-						}
-						$rsCl->free();
-						if(!$clTid){
-							$sqlCl1 = 'INSERT INTO fmchklsttaxalink(clid, tid) VALUES('.$occArr['clidvoucher'].','.$occArr['tidinterpreted'].') ';
-							if($this->conn->query($sqlCl1)){
-								$clTid = $occArr['tidinterpreted'];
-							}
-							else{
-								$status .= '(WARNING adding scientific name to checklist: '.$this->conn->error.') ';
-							}
-						}
-						//Add voucher
-						if($clTid){
-							$sqlCl2 = 'INSERT INTO fmvouchers(occid,clid,tid) '.
-								'values('.$this->occid.','.$occArr['clidvoucher'].','.$clTid.')';
-							//echo $sqlCl2;
-							if(!$this->conn->query($sqlCl2)){
-								$status .= '(WARNING adding voucher link: '.$this->conn->error.') ';
-							}
-						}
-					}
+				if(isset($occArr['clidvoucher']) && isset($occArr['tidinterpreted'])){
+					$status .= $this->linkChecklistVoucher($occArr['clidvoucher'],$occArr['tidinterpreted']);
 				}
 				//Deal with duplicate clustering
 				if(isset($occArr['linkdupe']) && $occArr['linkdupe']){
@@ -1171,7 +1144,7 @@ class OccurrenceEditorManager {
 		$sqlFrag = '';
 		foreach($sArr as $k => $v){
 			if(($v != '') && $tArr[$k] == ''){
-				$sqlFrag .= ','.$k.'="'.$v.'"';
+				$sqlFrag .= ','.$k.'="'.$this->cleanInStr($v).'"';
 			}
 		}
 		if($sqlFrag){
@@ -1447,6 +1420,87 @@ class OccurrenceEditorManager {
 		return $retArr;
 	}
 
+	//Checklist voucher functions
+	public function getVoucherChecklists(){
+		$retArr = array();
+		$sql = 'SELECT c.clid, c.name '.
+			'FROM fmchecklists c INNER JOIN fmvouchers v ON c.clid = v.clid '.
+			'WHERE v.occid = '.$this->occid;
+		$rs = $this->conn->query($sql);
+		while($r = $rs->fetch_object()){
+			$retArr[$r->clid] = $r->name;
+		}
+		$rs->free();
+		asort($retArr);
+		return $retArr;
+	}
+
+	public function linkChecklistVoucher($clid,$tid){
+		$status = '';
+		if(is_numeric($clid) && is_numeric($tid)){
+			//Check to see it the name is in the list, if not, add it
+			$clTid = 0;
+			$sqlCl = 'SELECT cl.tid '.
+					'FROM fmchklsttaxalink cl INNER JOIN taxstatus ts1 ON cl.tid = ts1.tidaccepted '.
+					'INNER JOIN taxstatus ts2 ON ts1.tidaccepted = ts2.tidaccepted '.
+					'WHERE ts1.taxauthid = 1 AND ts2.taxauthid = 1 AND ts2.tid = '.$tid.' AND cl.clid = '.$clid;
+			$rsCl = $this->conn->query($sqlCl);
+			//echo $sqlCl;
+			if($rowCl = $rsCl->fetch_object()){
+				$clTid = $rowCl->tid;
+			}
+			$rsCl->free();
+			if(!$clTid){
+				$sqlCl1 = 'INSERT INTO fmchklsttaxalink(clid, tid) VALUES('.$clid.','.$tid.') ';
+				if($this->conn->query($sqlCl1)){
+					$clTid = $tid;
+				}
+				else{
+					$status .= '(WARNING adding scientific name to checklist: '.$this->conn->error.'); ';
+				}
+			}
+			//Add voucher
+			if($clTid){
+				$sqlCl2 = 'INSERT INTO fmvouchers(occid,clid,tid) '.
+						'values('.$this->occid.','.$clid.','.$clTid.')';
+				//echo $sqlCl2;
+				if(!$this->conn->query($sqlCl2)){
+					$status .= '(WARNING adding voucher link: '.$this->conn->error.'); ';
+				}
+			}
+		}
+		return $status;
+	}
+
+	public function deleteChecklistVoucher($clid){
+		$status = '';
+		if(is_numeric($clid)){
+			$sql = 'DELETE FROM fmvouchers WHERE clid = '.$clid.' AND occid = '.$this->occid;
+			if(!$this->conn->query($sql)){
+				$status = 'ERROR deleting voucher from checklist: '.$this->conn->error;
+			}
+		}
+		return $status;
+	}
+
+	public function getUserChecklists(){
+		// Return list of checklists to which user has editing writes 
+		$retArr = Array();
+		if(ISSET($GLOBALS['USER_RIGHTS']['ClAdmin'])){
+			$sql = 'SELECT clid, name, access '.
+					'FROM fmchecklists '.
+					'WHERE (clid IN('.implode(',',$GLOBALS['USER_RIGHTS']['ClAdmin']).')) ';
+			//echo $sql; exit;
+			$rs = $this->conn->query($sql);
+			while($r = $rs->fetch_object()){
+				$retArr[$r->clid] = $r->name.($r->access == 'private'?' (private)':'');
+			}
+			$rs->free();
+			asort($retArr);
+		}
+		return $retArr;
+	}
+
 	//Duplicate functions
 	private function linkDuplicates($occidStr,$dupTitle){
 		$status = '';
@@ -1489,7 +1543,7 @@ class OccurrenceEditorManager {
 			'notes = '.($genArr['notes']?'"'.$this->cleanInStr($genArr['notes']).'"':'NULL').' '.
 			'WHERE idoccurgenetic = '.$genArr['genid'];
 		if(!$this->conn->query($sql)){
-			return 'ERROR editing genetic resource #'.$id.': '.$this->conn->error;
+			return 'ERROR editing genetic resource #'.$genArr['genid'].': '.$this->conn->error;
 		}
 		return 'Genetic resource editted successfully';
 	}
@@ -1622,25 +1676,52 @@ class OccurrenceEditorManager {
 		//echo $sql;
 		$result = $this->conn->query($sql);
 		if($result){
-			$cnt = 0;
 			while($r = $result->fetch_object()){
 				$k = substr($r->initialtimestamp,0,16);
 				if(!isset($retArr[$k]['editor'])){
 					$retArr[$k]['editor'] = $r->editor;
 					$retArr[$k]['ts'] = $r->initialtimestamp;
+					$retArr[$k]['reviewstatus'] = $r->reviewstatus;
+					$retArr[$k]['appliedstatus'] = $r->appliedstatus;
 				}
-				$retArr[$k][$cnt]['fieldname'] = $r->fieldname;
-				$retArr[$k][$cnt]['old'] = $r->fieldvalueold;
-				$retArr[$k][$cnt]['new'] = $r->fieldvaluenew;
-				$retArr[$k][$cnt]['reviewstatus'] = $r->reviewstatus;
-				$retArr[$k][$cnt]['appliedstatus'] = $r->appliedstatus;
-				$cnt++;
+				$retArr[$k]['edits'][$r->ocedid]['fieldname'] = $r->fieldname;
+				$retArr[$k]['edits'][$r->ocedid]['old'] = $r->fieldvalueold;
+				$retArr[$k]['edits'][$r->ocedid]['new'] = $r->fieldvaluenew;
 			}
 			$result->free();
 		}
 		else{
 			trigger_error('Unable to get edits; '.$this->conn->error,E_USER_WARNING);
 		}
+		return $retArr;
+	}
+
+	public function getExternalEditArr(){
+		$retArr = Array();
+		$sql = 'SELECT r.orid, r.oldvalues, r.newvalues, r.externalsource, r.externaleditor, r.reviewstatus, r.appliedstatus, '.
+				'CONCAT_WS(", ",u.lastname,u.firstname) AS username, r.externaltimestamp, r.initialtimestamp '.
+				'FROM omoccurrevisions r LEFT JOIN users u ON r.uid = u.uid '.
+				'WHERE (r.occid = '.$this->occid.') ORDER BY r.initialtimestamp DESC ';
+		//echo '<div>'.$sql.'</div>';
+		$rs = $this->conn->query($sql);
+		while($r = $rs->fetch_object()){
+			$editor = $r->externaleditor;
+			if($r->username) $editor .= ' ('.$r->username.')';
+			$ts = $r->initialtimestamp;
+			$retArr[$ts]['editor'] = $editor;
+			$retArr[$ts]['source'] = $r->externalsource;
+			$retArr[$ts]['reviewstatus'] = $r->reviewstatus;
+			$retArr[$ts]['appliedstatus'] = $r->appliedstatus;
+	
+			$oldValues = json_decode($r->oldvalues,true);
+			$newValues = json_decode($r->newvalues,true);
+			foreach($oldValues as $fieldName => $value){
+				$retArr[$ts]['edits'][$r->orid]['fieldname'] = $fieldName;
+				$retArr[$ts]['edits'][$r->orid]['old'] = $value;
+				$retArr[$ts]['edits'][$r->orid]['new'] = (isset($newValues[$fieldName])?$newValues[$fieldName]:'ERROR');
+			}
+		}
+		$rs->free();
 		return $retArr;
 	}
 
@@ -1774,7 +1855,8 @@ class OccurrenceEditorManager {
 
 	//Setters and getters
 	public function getErrorStr(){
-		return implode('; ',$this->errorArr);	
+		if($this->errorArr) return implode('; ',$this->errorArr);
+		else return '';	
 	}
 
 	public function getCollectionList(){
@@ -1796,23 +1878,6 @@ class OccurrenceEditorManager {
 		return $retArr;
 	}
 
-	public function getUserChecklists(){
-		$retArr = Array();
-		if(ISSET($GLOBALS['USER_RIGHTS']['ClAdmin'])){
-			$sql = 'SELECT clid, name, access '.
-				'FROM fmchecklists '.
-				'WHERE (clid IN('.implode(',',$GLOBALS['USER_RIGHTS']['ClAdmin']).')) ';
-			//echo $sql; exit;
-			$rs = $this->conn->query($sql);
-			while($r = $rs->fetch_object()){
-				$retArr[$r->clid] = $r->name.($r->access == 'private'?' (private)':'');
-			}
-			$rs->free();
-			asort($retArr);
-		}
-		return $retArr;
-	}
-	
 	public function getQuickHost($occId){
 		$retArr = Array();
 		$sql = 'SELECT associd, verbatimsciname '.
@@ -1849,7 +1914,8 @@ class OccurrenceEditorManager {
 		global $charset;
 		$retStr = $inStr;
 		//Get rid of curly quotes
-		$search = array("’", "‘", "`", "”", "“");
+        //TODO the following search array should be checked - leaving as-was but I doubt this is functioning as intended
+        $search = array("Ã­", "Ã«", "`", "Ã®", "Ã¬");
 		$replace = array("'", "'", "'", '"', '"');
 		$inStr= str_replace($search, $replace, $inStr);
 

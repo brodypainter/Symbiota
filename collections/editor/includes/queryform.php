@@ -184,9 +184,9 @@ else{
 					'decimalLatitude'=>'Decimal Latitude','decimalLongitude'=>'Decimal Longitude','geodeticDatum'=>'Geodetic Datum',
 					'coordinateUncertaintyInMeters'=>'Uncertainty (m)','verbatimCoordinates'=>'Verbatim Coordinates',
 					'georeferencedBy'=>'Georeferenced By','georeferenceProtocol'=>'Georeference Protocol','georeferenceSources'=>'Georeference Sources',
-					'georeferenceVerificationStatus'=>'Georeference Verification Status','georeferenceRemarks'=>'Georeference Remarks',
+					'georeferenceVerificationStatus'=>'Georeference Verification Status','georeferenceRemarks'=>'Georeference Remarks','localitySecurity'=>'Locality Security',
 					'minimumElevationInMeters'=>'Elevation Minimum (m)','maximumElevationInMeters'=>'Elevation Maximum (m)',
-					'verbatimElevation'=>'Verbatim Elevation','disposition'=>'Disposition','ocrFragment'=>'OCR Fragment','username'=>'Modified By','dateEntered'=>'Date Entered');
+					'verbatimElevation'=>'Verbatim Elevation','disposition'=>'Disposition','ocrFragment'=>'OCR Fragment','username'=>'Modified By','dateEntered'=>'Date Entered','basisOfRecord'=>'Basis Of Record');
 			}
 			//sort($advFieldArr);
 			?>
@@ -203,6 +203,7 @@ else{
 				</select>
 				<select name="q_customtype1">
 					<option>EQUALS</option>
+					<option <?php echo ($qCustomType1=='NOT EQUALS'?'SELECTED':''); ?> value="NOT EQUALS">NOT EQUALS</option>
 					<option <?php echo ($qCustomType1=='STARTS'?'SELECTED':''); ?> value="STARTS">STARTS WITH</option>
 					<option <?php echo ($qCustomType1=='LIKE'?'SELECTED':''); ?> value="LIKE">CONTAINS</option>
 					<option <?php echo ($qCustomType1=='GREATER'?'SELECTED':''); ?> value="GREATER">GREATER THAN</option>
@@ -228,6 +229,7 @@ else{
 				</select>
 				<select name="q_customtype2">
 					<option>EQUALS</option>
+					<option <?php echo ($qCustomType2=='NOT EQUALS'?'SELECTED':''); ?> value="NOT EQUALS">NOT EQUALS</option>
 					<option <?php echo ($qCustomType2=='STARTS'?'SELECTED':''); ?> value="STARTS">STARTS WITH</option>
 					<option <?php echo ($qCustomType2=='LIKE'?'SELECTED':''); ?> value="LIKE">CONTAINS</option>
 					<option <?php echo ($qCustomType2=='GREATER'?'SELECTED':''); ?> value="GREATER">GREATER THAN</option>
@@ -253,6 +255,7 @@ else{
 				</select>
 				<select name="q_customtype3">
 					<option>EQUALS</option>
+					<option <?php echo ($qCustomType3=='NOT EQUALS'?'SELECTED':''); ?> value="NOT EQUALS">NOT EQUALS</option>
 					<option <?php echo ($qCustomType3=='STARTS'?'SELECTED':''); ?> value="STARTS">STARTS WITH</option>
 					<option <?php echo ($qCustomType3=='LIKE'?'SELECTED':''); ?> value="LIKE">CONTAINS</option>
 					<option <?php echo ($qCustomType3=='GREATER'?'SELECTED':''); ?> value="GREATER">GREATER THAN</option>

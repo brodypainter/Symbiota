@@ -149,6 +149,8 @@ class ChecklistManager {
 		//Get species list
 		$familyPrev="";$genusPrev="";$speciesPrev="";$taxonPrev="";
 		$tidReturn = Array();
+        $genusCntArr = Array();
+        $familyCntArr = Array();
 		if($this->showImages && $retLimit) $retLimit = $this->imageLimit;
 		if(!$this->basicSql) $this->setClSql();
 		$result = $this->conn->query($this->basicSql);
@@ -185,11 +187,17 @@ class ChecklistManager {
 					$this->taxaList[$tid]["author"] = $this->cleanOutStr($row->author);
 				}
     		}
-    		if($family != $familyPrev) $this->familyCount++;
-    		$familyPrev = $family;
-    		if($taxonTokens[0] != $genusPrev) $this->genusCount++;
+    		//if($family != $familyPrev) $this->familyCount++;
+            if(!in_array($family,$familyCntArr)){
+                $familyCntArr[] = $family;
+            }
+            if(!in_array($taxonTokens[0],$genusCntArr)){
+                $genusCntArr[] = $taxonTokens[0];
+            }
+    		//$familyPrev = $family;
+    		//if($taxonTokens[0] != $genusPrev) $this->genusCount++;
 			$this->filterArr[$taxonTokens[0]] = "";
-    		$genusPrev = $taxonTokens[0];
+    		//$genusPrev = $taxonTokens[0];
     		if(count($taxonTokens) > 1 && $taxonTokens[0]." ".$taxonTokens[1] != $speciesPrev){
     			$this->speciesCount++;
     			$speciesPrev = $taxonTokens[0]." ".$taxonTokens[1];
@@ -199,6 +207,8 @@ class ChecklistManager {
     		}
     		$taxonPrev = implode(" ",$taxonTokens);
 		}
+        $this->familyCount = count($familyCntArr);
+        $this->genusCount = count($genusCntArr);
 		$this->filterArr = array_keys($this->filterArr);
 		sort($this->filterArr);
 		$result->free();
@@ -497,19 +507,35 @@ class ChecklistManager {
 	//Checklist index page fucntions
 	public function getChecklists(){
 		$retArr = Array();
-		if($this->pid){
-			$sql = "SELECT p.pid, p.projname, c.CLID, c.Name ".
-				"FROM (fmprojects p INNER JOIN fmchklstprojlink cpl ON p.pid = cpl.pid) ".
-				"INNER JOIN fmchecklists c ON cpl.clid = c.CLID ".
-				"WHERE (p.pid = ".$this->pid.") AND (c.access = 'public' AND p.ispublic = 1) ".
-				"ORDER BY p.SortSequence, p.projname, c.SortSequence, c.Name";
-			//echo $sql;
-			$rs = $this->conn->query($sql);
-			while($row = $rs->fetch_object()){
-				$retArr['name'] = $this->cleanOutStr($row->projname);
-				$retArr['clid'][$row->CLID] = $this->cleanOutStr($row->Name);
+		$sql = 'SELECT p.pid, p.projname, p.ispublic, c.clid, c.name, c.access '.
+			'FROM fmchecklists c LEFT JOIN fmchklstprojlink cpl ON c.clid = cpl.clid '.
+			'LEFT JOIN fmprojects p ON cpl.pid = p.pid '.
+			'WHERE ((c.access LIKE "public%") ';
+		if(isset($GLOBALS['USER_RIGHTS']['ClAdmin']) && $GLOBALS['USER_RIGHTS']['ClAdmin']) $sql .= 'OR (c.clid IN('.implode(',',$GLOBALS['USER_RIGHTS']['ClAdmin']).'))';
+		$sql .= ') AND ((p.pid IS NULL) OR (p.ispublic = 1) ';
+		if(isset($GLOBALS['USER_RIGHTS']['ProjAdmin']) && $GLOBALS['USER_RIGHTS']['ProjAdmin']) $sql .= 'OR (p.pid IN('.implode(',',$GLOBALS['USER_RIGHTS']['ProjAdmin']).'))';
+		$sql .= ') ';
+		if($this->pid) $sql .= 'AND (p.pid = '.$this->pid.') ';
+		$sql .= 'ORDER BY p.projname, c.Name';
+		//echo $sql;
+		$rs = $this->conn->query($sql);
+		while($row = $rs->fetch_object()){
+			if($row->pid){
+				$pid = $row->pid;
+				$projName = $row->projname.(!$row->ispublic?' (Private)':'');
 			}
-			$rs->free();
+			else{
+				$pid = 0;
+				$projName = 'Undefinded Inventory Project';
+			}
+			$retArr[$pid]['name'] = $this->cleanOutStr($projName);
+			$retArr[$pid]['clid'][$row->clid] = $this->cleanOutStr($row->name).($row->access=='private'?' (Private)':'');
+		}
+		$rs->free();
+		if(isset($retArr[0])){
+			$tempArr = $retArr[0];
+			unset($retArr[0]);
+			$retArr[0] = $tempArr;
 		}
 		return $retArr;
 	}

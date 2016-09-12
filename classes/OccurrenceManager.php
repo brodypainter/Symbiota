@@ -548,7 +548,7 @@ class OccurrenceManager{
 			'FROM omcollections c INNER JOIN omcollectionstats s ON c.collid = s.collid '.
 			'LEFT JOIN omcollcatlink ccl ON c.collid = ccl.collid '.
 			'LEFT JOIN omcollcategories cat ON ccl.ccpk = cat.ccpk '.
-			'WHERE s.recordcnt > 0 '.
+			'WHERE s.recordcnt > 0 AND (cat.inclusive IS NULL OR cat.inclusive = 1 OR cat.ccpk = 1) '.
 			'ORDER BY ccl.sortsequence, cat.category, c.sortseq, c.CollectionName ';
 		//echo "<div>SQL: ".$sql."</div>";
 		$result = $this->conn->query($sql);
@@ -603,6 +603,7 @@ class OccurrenceManager{
 	public function outputFullCollArr($occArr){
 		global $DEFAULTCATID;
 		$collCnt = 0;
+		echo '<div style="position:relative">';
 		if(isset($occArr['cat'])){
 			$categoryArr = $occArr['cat'];
 			?>
@@ -741,11 +742,23 @@ class OccurrenceManager{
 				}
 				?>
 			</table>
-			<div style="float:right;margin-top:<?php echo count($collArr)*15; ?>px;">
-				<input type="submit" class="searchcollnextbtn" value="" title="" />
-			</div>
 			<?php
+			if(!isset($occArr['cat'])){
+				?>
+				<div style="float:right;position:absolute;top:<?php echo count($collArr)*5; ?>px;right:0px;">
+					<input type="submit" class="searchcollnextbtn" value="" title="" />
+				</div>
+				<?php
+			}
+			if(count($collArr) > 40){
+				?>
+				<div style="float:right;position:absolute;top:<?php echo count($collArr)*15; ?>px;right:0px;">
+					<input type="submit" class="searchcollnextbtn" value="" title="" />
+				</div>
+				<?php
+			}
 		}
+		echo '</div>';
 		$this->collArrIndex++;
 	}
 
@@ -973,11 +986,19 @@ class OccurrenceManager{
 			$country = $this->conn->real_escape_string($this->cleanSearchQuotes($_REQUEST["country"]));
 			if($country){
 				$str = str_replace(",",";",$country);
-				if(stripos($str, "USA") !== false && stripos($str, "United States") === false){
-					$str .= ";United States";
-				}
-				elseif(stripos($str, "United States") !== false && stripos($str, "USA") === false){
-					$str .= ";USA";
+				if(stripos($str, "USA") !== false || stripos($str, "United States") !== false || stripos($str, "U.S.A.") !== false || stripos($str, "United States of America") !== false){
+					if(stripos($str, "USA") === false){
+						$str .= ";USA";
+					}
+					if(stripos($str, "United States") === false){
+						$str .= ";United States";
+					}
+					if(stripos($str, "U.S.A.") === false){
+						$str .= ";U.S.A.";
+					}
+					if(stripos($str, "United States of America") === false){
+						$str .= ";United States of America";
+					}
 				}
 				$searchArr[] = "country:".$str;
 				$this->searchTermsArr["country"] = $str;

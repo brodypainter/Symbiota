@@ -186,7 +186,7 @@ class DwcArchiverOccurrence{
 		$occurTermArr['sex'] = 'http://rs.tdwg.org/dwc/terms/sex';
 		$occurFieldArr['sex'] = 'o.sex';
 		$occurTermArr['individualCount'] = 'http://rs.tdwg.org/dwc/terms/individualCount';
-		$occurFieldArr['individualCount'] = 'o.individualCount';
+		$occurFieldArr['individualCount'] = 'CASE WHEN o.individualCount REGEXP("(^[0-9]+$)") THEN o.individualCount ELSE NULL END AS individualCount';
 		$occurTermArr['samplingProtocol'] = 'http://rs.tdwg.org/dwc/terms/samplingProtocol';
 		$occurFieldArr['samplingProtocol'] = 'o.samplingProtocol';
 		$occurTermArr['samplingEffort'] = 'http://rs.tdwg.org/dwc/terms/samplingEffort';
@@ -641,6 +641,28 @@ class DwcArchiverOccurrence{
 		}
 	}
 
+    public function verifyCollRecords($collId){
+		$sql = '';
+		$recArr = array();
+		$sql = 'SELECT COUNT(CASE WHEN ISNULL(o.occurrenceID) THEN o.occid ELSE NULL END) AS nullOccurID, '.
+			'COUNT(CASE WHEN ISNULL(o.basisOfRecord) THEN o.occid ELSE NULL END) AS nullBasisRec, '.
+			'COUNT(CASE WHEN ISNULL(o.catalogNumber) THEN o.occid ELSE NULL END) AS nullCatNum, '.
+			'COUNT(CASE WHEN ISNULL(g.guid) THEN o.occid ELSE NULL END) AS nullSymUUID '.
+			'FROM omoccurrences AS o LEFT JOIN guidoccurrences AS g ON o.occid = g.occid '.
+			'WHERE o.collid = '.$collId;
+		//echo 'SQL: '.$sql.'<br/>';
+		$rs = $this->conn->query($sql);
+		while($r = $rs->fetch_object()){
+			$recArr['nullOccurID'] = $r->nullOccurID;
+			$recArr['nullBasisRec'] = $r->nullBasisRec;
+			$recArr['nullCatNum'] = $r->nullCatNum;
+			$recArr['nullSymUUID'] = $r->nullSymUUID;
+		}
+		$rs->free();
+		
+		return $recArr;
+	}
+
 	public function getCollArr(){
 		return $this->collArr;
 	}
@@ -1027,7 +1049,7 @@ class DwcArchiverOccurrence{
 		if($rs = $this->conn->query($sql,MYSQLI_USE_RESULT)){
 			if(!$this->serverDomain){
 				$this->serverDomain = "http://";
-				if(!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) $this->serverDomain = "https://";
+				if((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || $_SERVER['SERVER_PORT'] == 443) $this->serverDomain = "https://";
 				$this->serverDomain .= $_SERVER["SERVER_NAME"];
 				if($_SERVER["SERVER_PORT"] && $_SERVER["SERVER_PORT"] != 80) $this->serverDomain .= ':'.$_SERVER["SERVER_PORT"];
 			}
@@ -1055,14 +1077,15 @@ class DwcArchiverOccurrence{
 						$r['informationWithheld'] = trim($r['informationWithheld'].'; field values redacted: '.implode(', ',$protectedFields),' ;');
 					}
 				}
-				
-				//Set occurrence GUID based on GUID target
-				$guidTarget = $this->collArr[$r['collid']]['guidtarget'];
-				if($guidTarget == 'catalogNumber'){
-					$r['occurrenceID'] = $r['catalogNumber'];
-				}
-				elseif($guidTarget == 'symbiotaUUID'){
-					$r['occurrenceID'] = $r['recordId'];
+				if(!$r['occurrenceID']){
+					//Set occurrence GUID based on GUID target, but only if occurrenceID field isn't already populated
+					$guidTarget = $this->collArr[$r['collid']]['guidtarget'];
+					if($guidTarget == 'catalogNumber'){
+						$r['occurrenceID'] = $r['catalogNumber'];
+					}
+					elseif($guidTarget == 'symbiotaUUID'){
+						$r['occurrenceID'] = $r['recordId'];
+					}
 				}
 				
 				$r['recordId'] = 'urn:uuid:'.$r['recordId'];
@@ -1457,9 +1480,17 @@ class DwcArchiverOccurrence{
 	 * USED BY: this class, DwcArchiverExpedition, and emlhandler.php 
 	 */
 	public function getEmlDom($emlArr = null){
-		
-		if(!$emlArr) $emlArr = $this->getEmlArr();
-		//Create new DOM document 
+        global $RIGHTS_TERMS_DEFS;
+        $usageTermArr = Array();
+
+        if(!$emlArr) $emlArr = $this->getEmlArr();
+        foreach($RIGHTS_TERMS_DEFS as $k => $v){
+            if($k == $emlArr['intellectualRights']){
+                $usageTermArr = $v;
+            }
+        }
+
+        //Create new DOM document
 		$newDoc = new DOMDocument('1.0',$this->charSetOut);
 
 		//Add root element 
@@ -1601,8 +1632,15 @@ class DwcArchiverOccurrence{
 		if(array_key_exists('intellectualRights',$emlArr)){
 			$rightsElem = $newDoc->createElement('intellectualRights');
 			$paraElem = $newDoc->createElement('para');
-			$paraElem->appendChild($newDoc->createTextNode($emlArr['intellectualRights']));
-			$rightsElem->appendChild($paraElem);
+            $paraElem->appendChild($newDoc->createTextNode('To the extent possible under law, the publisher has waived all rights to these data and has dedicated them to the'));
+            $ulinkElem = $newDoc->createElement('ulink');
+            $citetitleElem = $newDoc->createElement('citetitle');
+            $citetitleElem->appendChild($newDoc->createTextNode((array_key_exists('title',$usageTermArr)?$usageTermArr['title']:'')));
+            $ulinkElem->appendChild($citetitleElem);
+            $ulinkElem->setAttribute('url',(array_key_exists('url',$usageTermArr)?$usageTermArr['url']:$emlArr['intellectualRights']));
+            $paraElem->appendChild($ulinkElem);
+            $paraElem->appendChild($newDoc->createTextNode((array_key_exists('def',$usageTermArr)?$usageTermArr['def']:'')));
+            $rightsElem->appendChild($paraElem);
 			$datasetElem->appendChild($rightsElem);
 		}
 
@@ -1665,7 +1703,7 @@ class DwcArchiverOccurrence{
 		if($this->schemaType == 'coge' && $this->geolocateVariables){
 			if(!$this->serverDomain){
 				$this->serverDomain = "http://";
-				if(!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) $this->serverDomain = "https://";
+				if((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || $_SERVER['SERVER_PORT'] == 443) $this->serverDomain = "https://";
 				$this->serverDomain .= $_SERVER["SERVER_NAME"];
 				if($_SERVER["SERVER_PORT"] && $_SERVER["SERVER_PORT"] != 80) $this->serverDomain .= ':'.$_SERVER["SERVER_PORT"];
 			}
@@ -1766,7 +1804,7 @@ class DwcArchiverOccurrence{
 		if($rs = $this->conn->query($sql,MYSQLI_USE_RESULT)){
 			if(!$this->serverDomain){
 				$this->serverDomain = "http://";
-				if(!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) $this->serverDomain = "https://";
+				if((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || $_SERVER['SERVER_PORT'] == 443) $this->serverDomain = "https://";
 				$this->serverDomain .= $_SERVER["SERVER_NAME"];
 				if($_SERVER["SERVER_PORT"] && $_SERVER["SERVER_PORT"] != 80) $this->serverDomain .= ':'.$_SERVER["SERVER_PORT"];
 			}
@@ -1784,7 +1822,7 @@ class DwcArchiverOccurrence{
 				elseif($guidTarget == 'symbiotaUUID'){
 					$r['occurrenceID'] = $r['recordId'];
 				}
-				if($this->limitToGuids && !$r['occurrenceID']){
+				if($this->limitToGuids && (!$r['occurrenceID'] || !$r['basisOfRecord'])){
 					// Skip record because there is no occurrenceID guid
 					continue;
 				}
@@ -1920,7 +1958,7 @@ class DwcArchiverOccurrence{
 			
 			if(!$this->serverDomain){
 				$this->serverDomain = "http://";
-				if(!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) $this->serverDomain = "https://";
+				if((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || $_SERVER['SERVER_PORT'] == 443) $this->serverDomain = "https://";
 				$this->serverDomain .= $_SERVER["SERVER_NAME"];
 				if($_SERVER["SERVER_PORT"] && $_SERVER["SERVER_PORT"] != 80) $this->serverDomain .= ':'.$_SERVER["SERVER_PORT"];
 			}
@@ -2066,7 +2104,7 @@ class DwcArchiverOccurrence{
 		
 		if(!$this->serverDomain){
 			$this->serverDomain = "http://";
-			if(!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) $this->serverDomain = "https://";
+			if((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || $_SERVER['SERVER_PORT'] == 443) $this->serverDomain = "https://";
 			$this->serverDomain .= $_SERVER["SERVER_NAME"];
 			if($_SERVER["SERVER_PORT"] && $_SERVER["SERVER_PORT"] != 80) $this->serverDomain .= ':'.$_SERVER["SERVER_PORT"];
 		}

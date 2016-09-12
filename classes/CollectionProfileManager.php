@@ -1,7 +1,7 @@
 <?php
-include_once($serverRoot.'/config/dbconnection.php');
-include_once($serverRoot.'/classes/OccurrenceMaintenance.php');
-include_once($serverRoot.'/classes/UuidFactory.php');
+include_once($SERVER_ROOT.'/config/dbconnection.php');
+include_once($SERVER_ROOT.'/classes/OccurrenceMaintenance.php');
+include_once($SERVER_ROOT.'/classes/UuidFactory.php');
 
 //Used by /collections/misc/collprofiles.php page
 class CollectionProfileManager {
@@ -9,6 +9,11 @@ class CollectionProfileManager {
 	private $conn;
 	private $collid;
 	private $errorStr;
+    private $organizationKey;
+    private $installationKey;
+    private $datasetKey;
+    private $endpointKey;
+    private $idigbioKey;
 
 	public function __construct(){
 		$this->conn = MySQLiConnectionFactory::getCon("readonly");
@@ -158,7 +163,8 @@ class CollectionProfileManager {
 	}
 
 	public function submitCollEdits($postArr){
-		$status = true;
+        global $GBIF_USERNAME,$GBIF_PASSWORD;
+	    $status = true;
 		if($this->collid){
 			$instCode = $this->cleanInStr($postArr['institutioncode']);
 			$collCode = $this->cleanInStr($postArr['collectioncode']);
@@ -168,6 +174,8 @@ class CollectionProfileManager {
 			$contact = $this->cleanInStr($postArr['contact']);
 			$email = $this->cleanInStr($postArr['email']);
 			$publicEdits = (array_key_exists('publicedits',$postArr)?$postArr['publicedits']:0);
+			$gbifPublish = (array_key_exists('publishToGbif',$postArr)?$postArr['publishToGbif']:'NULL');
+            $idigPublish = (array_key_exists('publishToIdigbio',$postArr)?$postArr['publishToIdigbio']:'NULL');
 			$guidTarget = (array_key_exists('guidtarget',$postArr)?$postArr['guidtarget']:'');
 			$rights = $this->cleanInStr($postArr['rights']);
 			$rightsHolder = $this->cleanInStr($postArr['rightsholder']);
@@ -190,9 +198,13 @@ class CollectionProfileManager {
 				'contact = '.($contact?'"'.$contact.'"':'NULL').','.
 				'email = '.($email?'"'.$email.'"':'NULL').','.
 				'latitudedecimal = '.($postArr['latitudedecimal']?$postArr['latitudedecimal']:'NULL').','.
-				'longitudedecimal = '.($postArr['longitudedecimal']?$postArr['longitudedecimal']:'NULL').','.
-				'publicedits = '.$publicEdits.','.
-				'guidtarget = '.($guidTarget?'"'.$guidTarget.'"':'NULL').','.
+				'longitudedecimal = '.($postArr['longitudedecimal']?$postArr['longitudedecimal']:'NULL').',';
+            if(array_key_exists('publishToIdigbio',$postArr)){
+                $sql .= 'publishToGbif = '.$gbifPublish.','.
+                    'publishToIdigbio = '.$idigPublish.',';
+            }
+            $sql .= 'publicedits = '.$publicEdits.','.
+                'guidtarget = '.($guidTarget?'"'.$guidTarget.'"':'NULL').','.
 				'rights = '.($rights?'"'.$rights.'"':'NULL').','.
 				'rightsholder = '.($rightsHolder?'"'.$rightsHolder.'"':'NULL').','.
 				'accessrights = '.($accessRights?'"'.$accessRights.'"':'NULL').', '.
@@ -233,7 +245,7 @@ class CollectionProfileManager {
 		return $status;
 	}
 
-	public function submitCollAdd($postArr){
+    public function submitCollAdd($postArr){
 		global $symbUid;
 		$instCode = $this->cleanInStr($postArr['institutioncode']);
 		$collCode = $this->cleanInStr($postArr['collectioncode']);
@@ -246,7 +258,11 @@ class CollectionProfileManager {
 		$rightsHolder = $this->cleanInStr($postArr['rightsholder']);
 		$accessRights = $this->cleanInStr($postArr['accessrights']);
 		$publicEdits = (array_key_exists('publicedits',$postArr)?$postArr['publicedits']:0);
-		$guidTarget = (array_key_exists('guidtarget',$postArr)?$postArr['guidtarget']:'');
+        $gbifPublish = (array_key_exists('publishToGbif',$postArr)?$postArr['publishToGbif']:0);
+        if(array_key_exists('publishToIdigbio',$postArr)){
+            $idigPublish = (array_key_exists('publishToIdigbio',$postArr)?$postArr['publishToIdigbio']:0);
+        }
+        $guidTarget = (array_key_exists('guidtarget',$postArr)?$postArr['guidtarget']:'');
 		if($_FILES['iconfile']['name']){
 			$icon = $this->addIconImageFile();
 		}
@@ -262,7 +278,9 @@ class CollectionProfileManager {
 
 		$conn = MySQLiConnectionFactory::getCon("write");
 		$sql = 'INSERT INTO omcollections(institutioncode,collectioncode,collectionname,fulldescription,homepage,'.
-			'contact,email,latitudedecimal,longitudedecimal,publicedits,guidtarget,rights,rightsholder,accessrights,icon,'.
+			'contact,email,latitudedecimal,longitudedecimal,publicedits,publishToGbif,'.
+            (array_key_exists('publishToIdigbio',$postArr)?'publishToIdigbio,':'').
+            'guidtarget,rights,rightsholder,accessrights,icon,'.
 			'managementtype,colltype,collectionguid,individualurl,sortseq) '.
 			'VALUES ("'.$instCode.'",'.
 			($collCode?'"'.$collCode.'"':'NULL').',"'.
@@ -272,8 +290,9 @@ class CollectionProfileManager {
 			($contact?'"'.$contact.'"':'NULL').','.
 			($email?'"'.$email.'"':'NULL').','.
 			($postArr['latitudedecimal']?$postArr['latitudedecimal']:'NULL').','.
-			($postArr['longitudedecimal']?$postArr['longitudedecimal']:'NULL').','.
-			$publicEdits.','.($guidTarget?'"'.$guidTarget.'"':'NULL').','.
+			($postArr['longitudedecimal']?$postArr['longitudedecimal']:'NULL').','.$publicEdits.','.$gbifPublish.','.
+            (array_key_exists('publishToIdigbio',$postArr)?$idigPublish.',':'').
+			($guidTarget?'"'.$guidTarget.'"':'NULL').','.
 			($rights?'"'.$rights.'"':'NULL').','.
 			($rightsHolder?'"'.$rightsHolder.'"':'NULL').','.
 			($accessRights?'"'.$accessRights.'"':'NULL').','.
@@ -391,7 +410,162 @@ class CollectionProfileManager {
 		}
 	}
 
-	public function getTaxonCounts($f=''){
+    public function triggerGBIFCrawl($datasetKey){
+        global $GBIF_USERNAME,$GBIF_PASSWORD;
+        $loginStr = $GBIF_USERNAME.':'.$GBIF_PASSWORD;
+        $url = 'http://api.gbif.org/v1/dataset/'.$datasetKey.'/crawl';
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_USERPWD, $loginStr);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, array(
+                'Content-Type: application/json',
+                'Accept: application/json')
+        );
+
+        $result = curl_exec($ch);
+    }
+
+    public function batchTriggerGBIFCrawl($collIdArr){
+        $collIdStr = implode(',',$collIdArr);
+        $sql = 'SELECT CollID, publishToGbif, aggKeysStr '.
+            'FROM omcollections '.
+            'WHERE CollID IN('.$collIdStr.') ';
+        //echo $sql; exit;
+        $rs = $this->conn->query($sql);
+        while($row = $rs->fetch_object()){
+            $publishGBIF = $row->publishToGbif;
+            $gbifKeyArr = $row->aggKeysStr;
+            if($publishGBIF && $gbifKeyArr){
+                $gbifKeyArr = json_decode($gbifKeyArr,true);
+                if($gbifKeyArr['endpointKey']){
+                    $this->triggerGBIFCrawl($gbifKeyArr['datasetKey']);
+                }
+            }
+        }
+        $rs->free();
+    }
+
+    public function setAggKeys($aggKeyStr){
+        $aggKeyArr = json_decode($aggKeyStr,true);
+        if($aggKeyArr['organizationKey']){
+            $this->organizationKey = $aggKeyArr['organizationKey'];
+        }
+        if($aggKeyArr['installationKey']){
+            $this->installationKey = $aggKeyArr['installationKey'];
+        }
+        if($aggKeyArr['datasetKey']){
+            $this->datasetKey = $aggKeyArr['datasetKey'];
+        }
+        if($aggKeyArr['endpointKey']){
+            $this->endpointKey = $aggKeyArr['endpointKey'];
+        }
+        if($aggKeyArr['idigbioKey']){
+            $this->idigbioKey = $aggKeyArr['idigbioKey'];
+        }
+    }
+
+    public function updateAggKeys($collId){
+        $aggKeyArr = array();
+        $status = true;
+        $aggKeyArr['organizationKey'] = $this->organizationKey;
+        $aggKeyArr['installationKey'] = $this->installationKey;
+        $aggKeyArr['datasetKey'] = $this->datasetKey;
+        $aggKeyArr['endpointKey'] = $this->endpointKey;
+        $aggKeyArr['idigbioKey'] = $this->idigbioKey;
+        $aggKeyStr = json_encode($aggKeyArr);
+        $conn = MySQLiConnectionFactory::getCon("write");
+        $sql = 'UPDATE omcollections '.
+            "SET aggKeysStr = '".$aggKeyStr."' ".
+            'WHERE (collid = '.$collId.')';
+        //echo $sql; exit;
+        if(!$conn->query($sql)){
+            $status = 'ERROR saving key: '.$conn->error;
+            return $status;
+        }
+
+        $conn->close();
+
+        return $status;
+
+    }
+
+    public function getInstallationKey(){
+        return $this->installationKey;
+    }
+
+    public function getDatasetKey(){
+        return $this->datasetKey;
+    }
+
+    public function getEndpointKey(){
+        return $this->endpointKey;
+    }
+
+    public function getIdigbioKey(){
+        return $this->idigbioKey;
+    }
+
+    public function getCollPubArr($collId){
+        $returnArr = Array();
+        $aggKeyStr = '';
+        $sql = 'SELECT CollID, publishToGbif, publishToIdigbio, aggKeysStr, collectionguid '.
+            'FROM omcollections '.
+            'WHERE CollID IN('.$collId.') ';
+        //echo $sql; exit;
+        $rs = $this->conn->query($sql);
+        while($row = $rs->fetch_object()){
+            $returnArr[$row->CollID]['publishToGbif'] = $row->publishToGbif;
+            $returnArr[$row->CollID]['publishToIdigbio'] = $row->publishToIdigbio;
+            $returnArr[$row->CollID]['collectionguid'] = $row->collectionguid;
+            $aggKeyStr = $row->aggKeysStr;
+        }
+        $rs->free();
+
+        if($aggKeyStr){
+            $this->setAggKeys($aggKeyStr);
+        }
+
+        return $returnArr;
+    }
+
+    public function getGbifInstKey(){
+        $returnArr = Array();
+        $sql = 'SELECT aggKeysStr '.
+            'FROM omcollections '.
+            'WHERE aggKeysStr IS NOT NULL ';
+        //echo $sql; exit;
+        $rs = $this->conn->query($sql);
+        while($row = $rs->fetch_object()){
+            $returnArr = json_decode($row->aggKeysStr,true);
+            if($returnArr['installationKey']){
+                return $returnArr['installationKey'];
+            }
+        }
+        $rs->free();
+
+        return '';
+    }
+
+    public function findIdigbioKey($guid){
+        global $CLIENT_ROOT;
+        $url = 'http://search.idigbio.org/v2/search/recordsets?rsq={%22recordids%22:%22';
+        $url .= ($_SERVER['HTTPS']?'https://':'http://');
+        $url .= $_SERVER['HTTP_HOST'].$CLIENT_ROOT;
+        $url .= '/webservices/dwc/'.$guid.'%22}';
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, "POST");
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        $result = curl_exec($ch);
+        $returnArr = json_decode($result,true);
+
+        if(isset($returnArr['items'][0]['uuid'])){
+            $this->idigbioKey = $returnArr['items'][0]['uuid'];
+        }
+        return $this->idigbioKey;
+    }
+
+    public function getTaxonCounts($f=''){
 		$family = $this->cleanInStr($f);
 		$returnArr = Array();
 		$sql = '';
@@ -757,6 +931,18 @@ class CollectionProfileManager {
 
 	public function getYearStatsDataArr($collId){
 		$statArr = array();
+		$sql = 'SELECT CONCAT_WS("-",c.institutioncode,c.collectioncode) as collcode, c.collectionname '.
+			'FROM omoccurrences AS o INNER JOIN omcollections AS c ON o.collid = c.collid '.
+			'LEFT JOIN images AS i ON o.occid = i.occid '.
+			'WHERE o.collid in('.$collId.') AND ((o.dateLastModified IS NOT NULL AND datediff(curdate(), o.dateLastModified) < 365) OR (datediff(curdate(), i.InitialTimeStamp) < 365)) '.
+			'ORDER BY c.collectionname ';
+		//echo $sql;
+		$rs = $this->conn->query($sql);
+		while($r = $rs->fetch_object()){
+			$statArr[$r->collcode]['collcode'] = $r->collcode;
+			$statArr[$r->collcode]['collectionname'] = $r->collectionname;
+		}
+		
 		$sql = 'SELECT CONCAT_WS("-",c.institutioncode,c.collectioncode) as collcode, CONCAT_WS("-",year(o.dateEntered),month(o.dateEntered)) as dateEntered, '.
 			'c.collectionname, month(o.dateEntered) as monthEntered, year(o.dateEntered) as yearEntered, COUNT(o.occid) AS speccnt '.
 			'FROM omoccurrences AS o INNER JOIN omcollections AS c ON o.collid = c.collid '.
@@ -765,8 +951,6 @@ class CollectionProfileManager {
 		//echo $sql;
 		$rs = $this->conn->query($sql);
 		while($r = $rs->fetch_object()){
-			$statArr[$r->collcode]['collcode'] = $r->collcode;
-			$statArr[$r->collcode]['collectionname'] = $r->collectionname;
 			$statArr[$r->collcode]['stats'][$r->dateEntered]['speccnt'] = $r->speccnt;
 		}
 		
@@ -820,11 +1004,37 @@ class CollectionProfileManager {
 		return $statArr;
 	}
 
+    public function getOrderStatsDataArr($collId){
+        $statsArr = Array();
+        $sql = 'SELECT t.SciName, COUNT(o.occid) AS SpecimensPerOrder, COUNT(o.decimalLatitude) AS GeorefSpecimensPerOrder, '.
+            'COUNT(CASE WHEN t2.RankId >= 220 THEN o.occid ELSE NULL END) AS IDSpecimensPerOrder, '.
+            'COUNT(CASE WHEN t2.RankId >= 220 AND o.decimalLatitude IS NOT NULL THEN o.occid ELSE NULL END) AS IDGeorefSpecimensPerOrder '.
+            'FROM omoccurrences AS o LEFT JOIN taxaenumtree AS e ON o.tidinterpreted = e.tid '.
+            'LEFT JOIN taxa AS t ON e.parenttid = t.TID '.
+            'LEFT JOIN taxa AS t2 ON o.tidinterpreted = t2.TID '.
+            'WHERE (o.collid IN('.$collId.')) AND t.RankId = 100 AND e.taxauthid = 1 '.
+            'GROUP BY t.SciName ';
+        $rs = $this->conn->query($sql);
+        //echo $sql;
+        while($r = $rs->fetch_object()){
+            $order = str_replace(array('"',"'"),"",$r->SciName);
+            if($order){
+                $statsArr[$order]['SpecimensPerOrder'] = $r->SpecimensPerOrder;
+                $statsArr[$order]['GeorefSpecimensPerOrder'] = $r->GeorefSpecimensPerOrder;
+                $statsArr[$order]['IDSpecimensPerOrder'] = $r->IDSpecimensPerOrder;
+                $statsArr[$order]['IDGeorefSpecimensPerOrder'] = $r->IDGeorefSpecimensPerOrder;
+            }
+        }
+        $rs->free();
+
+        return $statsArr;
+    }
+
 	private function addIconImageFile(){
 		$targetPath = $GLOBALS['SERVER_ROOT'].'/content/collicon/';
 		$urlBase = $GLOBALS['CLIENT_ROOT'].'/content/collicon/';
 		$urlPrefix = "http://";
-		if(!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) $urlPrefix = "https://";
+		if((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || $_SERVER['SERVER_PORT'] == 443) $urlPrefix = "https://";
 		$urlPrefix .= $_SERVER["SERVER_NAME"];
 		if($_SERVER["SERVER_PORT"] && $_SERVER["SERVER_PORT"] != 80) $urlPrefix .= ':'.$_SERVER["SERVER_PORT"];
 		$urlBase = $urlPrefix.$urlBase;

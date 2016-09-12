@@ -144,6 +144,8 @@ $dupClusterArr = $indManager->getDuplicateArr();
 $commentArr = $indManager->getCommentArr($isEditor);
 
 header("Content-Type: text/html; charset=".$CHARSET);
+header("Cache-Control: no-cache, must-revalidate"); // HTTP/1.1
+header("Expires: Sat, 26 Jul 1997 05:00:00 GMT"); // Date in the past
 ?>
 <html>
 <head>
@@ -383,7 +385,13 @@ header("Content-Type: text/html; charset=".$CHARSET);
 								?>
 								<div>
 									<b>Occurrence ID (GUID):</b> 
-									<?php echo $occArr['occurrenceid']; ?>
+									<?php
+									$resolvableGuid = false;
+									if(substr($occArr['occurrenceid'],0,4) == 'http') $resolvableGuid = true;
+									if($resolvableGuid) echo '<a href="'.$occArr['occurrenceid'].'" target="_blank">';
+									echo $occArr['occurrenceid'];
+									if($resolvableGuid) echo '</a>';
+									?>
 								</div>
 								<?php 
 							}
@@ -717,7 +725,7 @@ header("Content-Type: text/html; charset=".$CHARSET);
 									foreach($iArr as $imgId => $imgArr){
 										?>
 										<div style='float:left;text-align:center;padding:5px;'>
-											<a href='<?php echo $imgArr['url']; ?>' target="_blank">
+											<a href='<?php echo ($imgArr['lgurl']?$imgArr['lgurl']:$imgArr['url']); ?>' target="_blank">
 												<img border=1 width='130' src='<?php echo ($imgArr['tnurl']?$imgArr['tnurl']:$imgArr['url']); ?>' title='<?php echo $imgArr['caption']; ?>'/>
 											</a>
 											<?php if($imgArr['lgurl']) echo '<br/><a href="'.$imgArr['lgurl'].'" target="_blank">Large Version</a>'; ?>
@@ -733,31 +741,29 @@ header("Content-Type: text/html; charset=".$CHARSET);
 						<?php 
 						if($collMetadata['individualurl']){
 							$indUrl = '';
-							if(strpos($collMetadata['individualurl'],'--DBPK--') && $occArr['dbpk']){
+							if(strpos($collMetadata['individualurl'],'--DBPK--') !== false && $occArr['dbpk']){
 								$indUrl = str_replace('--DBPK--',$occArr['dbpk'],$collMetadata['individualurl']);
 							}
-							elseif(strpos($collMetadata['individualurl'],'--CATALOGNUMBER--') && $occArr['catalognumber']){
+							elseif(strpos($collMetadata['individualurl'],'--CATALOGNUMBER--') !== false && $occArr['catalognumber']){
 								$indUrl = str_replace('--CATALOGNUMBER--',$occArr['catalognumber'],$collMetadata['individualurl']);
 							}
-							elseif(strpos($collMetadata['individualurl'],'--OCCURRENCEID--') && $occArr['occurrenceid']){
+							elseif(strpos($collMetadata['individualurl'],'--OCCURRENCEID--') !== false && $occArr['occurrenceid']){
 								$indUrl = str_replace('--OCCURRENCEID--',$occArr['occurrenceid'],$collMetadata['individualurl']);
 							}
 							if($indUrl){
 								echo '<div style="margin-top:10px;clear:both;">';
-								echo '<b>Source:</b> <a href="'.$indUrl.'" target="_blank">';
+								echo '<b>Link to Source:</b> <a href="'.$indUrl.'" target="_blank">';
 								echo $collMetadata['institutioncode'].' #'.($occArr['catalognumber']?$occArr['catalognumber']:$occArr['dbpk']);
 								echo '</a></div>';
 							}
 						}
-						//GUID
-						echo '<div style="margin:3px 0px;"><b>Record Id:</b> '.$occArr['guid'].'</div>';
 						//Rights
 						$rightsStr = $collMetadata['rights'];
 						if($collMetadata['rights']){
 							$rightsHeading = '';
 							if(isset($rightsTerms)) $rightsHeading = array_search($rightsStr,$rightsTerms);
 							if(substr($collMetadata['rights'],0,4) == 'http'){
-								$rightsStr = '<a href="'.$rightsStr.'">'.($rightsHeading?$rightsHeading:$rightsStr).'</a>';
+								$rightsStr = '<a href="'.$rightsStr.'" target="_blank">'.($rightsHeading?$rightsHeading:$rightsStr).'</a>';
 							}
 							$rightsStr = '<div style="margin-top:2px;"><b>Usage Rights:</b> '.$rightsStr.'</div>';
 						}
@@ -778,6 +784,7 @@ header("Content-Type: text/html; charset=".$CHARSET);
 							}
 							?>
 						</div>
+						<div style="margin:3px 0px;"><b>Record Id:</b> <?php echo $occArr['guid']; ?></div>
 						
 						<div style="margin-top:10px;clear:both;">
 							For additional information on this specimen, please contact: 
@@ -980,52 +987,96 @@ header("Content-Type: text/html; charset=".$CHARSET);
 				</div>
 				<?php 
 				if($isEditor){
-					$editArr = $indManager->getEditArr();
 					?>
 					<div id="edittab">
 						<div style="padding:15px;">
 							<?php 
-							if(array_key_exists('CollAdmin',$USER_RIGHTS) && in_array($collid,$USER_RIGHTS['CollAdmin'])){
+							if(array_key_exists('CollAdmin',$USER_RIGHTS) && in_array($collid,$USER_RIGHTS['CollAdmin']) && in_array($collid,$USER_RIGHTS['CollEditor'])){
 								?>
 								<div style="float:right;" title="Manage Edits">
 									<a href="../editor/editreviewer.php?collid=<?php echo $collid.'&occid='.$occid; ?>"><img src="../../images/edit.png" style="border:0px;width:14px;" /></a>
 								</div>
 								<?php
 							}
-							echo '<div style="margin:15px;">';
+							echo '<div style="margin:20px 0px 30px 0px;">';
 							echo '<b>Entered By:</b> '.($occArr['recordenteredby']?$occArr['recordenteredby']:'not recorded').'<br/>';
 							echo '<b>Date entered:</b> '.($occArr['dateentered']?$occArr['dateentered']:'not recorded').'<br/>';
 							echo '<b>Date modified:</b> '.($occArr['datelastmodified']?$occArr['datelastmodified']:'not recorded').'<br/>';
 							if($occArr['modified'] && $occArr['modified'] != $occArr['datelastmodified']) echo '<b>Source date modified:</b> '.$occArr['modified'];
 							echo '</div>';
+							$editArr = $indManager->getEditArr();
+							//$externalEdits = $indManager->getExternalEditArr();
+							//if($editArr || $externalEdits){
 							if($editArr){
-								foreach($editArr as $k => $eArr){
+								if($editArr){
 									?>
-									<div>
-										<b>Editor:</b> <?php echo $eArr['editor']; ?>
-										<span style="margin-left:30px;"><b>Date:</b> <?php echo $eArr['ts']; ?></span>
-									</div>
-									<?php 
-									unset($eArr['editor']);
-									unset($eArr['ts']);
-									foreach($eArr as $vArr){
-										echo '<div style="margin:15px;">';
-										echo '<b>Field:</b> '.$vArr['fieldname'].'<br/>';
-										echo '<b>Old Value:</b> '.$vArr['old'].'<br/>';
-										echo '<b>New Value:</b> '.$vArr['new'].'<br/>';
-										$reviewStr = 'OPEN';
-										if($vArr['reviewstatus'] == 2){
-											$reviewStr = 'PENDING';
+									<fieldset style="padding:20px;">
+										<legend><b>Internal Edits</b></legend>
+										<?php 
+										foreach($editArr as $k => $eArr){
+											$reviewStr = 'OPEN';
+											if($eArr['reviewstatus'] == 2) $reviewStr = 'PENDING';
+											elseif($eArr['reviewstatus'] == 3) $reviewStr = 'CLOSED';
+											?>
+											<div>
+												<b>Editor:</b> <?php echo $eArr['editor']; ?>
+												<span style="margin-left:30px;"><b>Date:</b> <?php echo $eArr['ts']; ?></span>
+											</div>
+											<div>
+												<span><b>Applied Status:</b> <?php echo ($eArr['appliedstatus']?'applied':'not applied'); ?></span>
+												<span style="margin-left:30px;"><b>Review Status:</b> <?php echo $reviewStr; ?></span>
+											</div>
+											<?php
+											$edArr = $eArr['edits'];
+											foreach($edArr as $vArr){
+												echo '<div style="margin:15px;">';
+												echo '<b>Field:</b> '.$vArr['fieldname'].'<br/>';
+												echo '<b>Old Value:</b> '.$vArr['old'].'<br/>';
+												echo '<b>New Value:</b> '.$vArr['new'].'<br/>';
+												echo '</div>';
+											}
+											echo '<div style="margin:15px 0px;"><hr/></div>';
 										}
-										elseif($vArr['reviewstatus'] == 3){
-											$reviewStr = 'CLOSED';
-										}
-										echo '<b>Applied Status:</b> '.($vArr['appliedstatus']?'applied':'not applied').'; ';
-										echo '<b>Reveiw Status:</b> '.$reviewStr;
-										echo '</div>';
-									}
-									echo '<div style="margin:15px 0px;"><hr/></div>';
+										?>
+									</fieldset>
+									<?php
 								}
+								/*
+								if($externalEdits){
+									?>
+									<fieldset style="margin-top:20px;padding:20px;">
+										<legend><b>External Edits</b></legend>
+										<?php 
+										foreach($externalEdits as $ts => $eArr){
+											$reviewStr = 'OPEN';
+											if($eArr['reviewstatus'] == 2) $reviewStr = 'PENDING';
+											elseif($eArr['reviewstatus'] == 3) $reviewStr = 'CLOSED';
+											?>
+											<div>
+												<b>Editor:</b> <?php echo $eArr['editor']; ?>
+												<span style="margin-left:30px;"><b>Date:</b> <?php echo $ts; ?></span>
+												<span style="margin-left:30px;"><b>Source:</b> <?php echo $eArr['source']; ?></span>
+											</div>
+											<div>
+												<span><b>Applied Status:</b> <?php echo ($eArr['appliedstatus']?'applied':'not applied'); ?></span>
+												<span style="margin-left:30px;"><b>Review Status:</b> <?php echo $reviewStr; ?></span>
+											</div>
+											<?php
+											$edArr = $eArr['edits'];
+											foreach($edArr as $vArr){
+												echo '<div style="margin:15px;">';
+												echo '<b>Field:</b> '.$vArr['fieldname'].'<br/>';
+												echo '<b>Old Value:</b> '.$vArr['old'].'<br/>';
+												echo '<b>New Value:</b> '.$vArr['new'].'<br/>';
+												echo '</div>';
+											}
+											echo '<div style="margin:15px 0px;"><hr/></div>';
+										}
+										?>
+									</fieldset>
+									<?php
+								}
+								*/
 							}
 							else{
 								echo '<div style="margin:25px 15px;"><b>Record has not been edited</b></div>';
